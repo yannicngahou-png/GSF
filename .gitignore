@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.vercel/
+.clasp.json
+.env.local
+.env*.local
+.DS_Store
+Thumbs.db
