@@ -63,7 +63,14 @@ export const CONTENT = {
 
   upload: {
     title: 'Dépôt des documents',
-    text: "Indiquez l'email et le numéro WhatsApp saisis dans votre formulaire pour retrouver votre dossier.",
+    text: "Indiquez le type de demande, puis l'email et le numéro WhatsApp saisis dans votre formulaire.",
+    // Aide affichée sous le choix du type de demande.
+    hints: {
+      assistance:
+        "Si vous avez rempli le formulaire pour un membre (ayant droit), indiquez l'email et le numéro " +
+        'saisis dans la rubrique « Formulaire rempli par une tierce personne ».',
+      pret: '',
+    },
   },
 
   done: {

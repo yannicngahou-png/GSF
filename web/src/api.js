@@ -25,10 +25,8 @@ async function call(payload) {
 async function demo(payload) {
   await wait(payload.action === 'upload' ? 600 : 400);
   if (payload.action === 'open') {
-    const d = new Date();
-    const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-    const matricule = payload.matricule || `PAFIS_${date}_00001`;
-    return { ok: true, matricule, token: 'demo', nom: 'Demandeur (démo)', documents: 0 };
+    // Matricule fictif : le vrai est attribué par Apps Script à l'envoi du formulaire.
+    return { ok: true, matricule: payload.matricule || 'DEMO_00000000_00000', token: 'demo', documents: 0 };
   }
   if (payload.action === 'finalize') return { ok: true, documents: payload.count };
   return { ok: true };

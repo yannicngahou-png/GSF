@@ -1,7 +1,8 @@
 /**
  * Application web appelée par l'espace « Déposer mes documents » de la landing page.
  *
- *  1. open     → retrouve le dossier (email + n° WhatsApp du formulaire), renvoie le matricule et un jeton
+ *  1. open     → retrouve le dossier (type de demande + email + n° WhatsApp du formulaire),
+ *                renvoie le matricule et un jeton
  *  2. upload   → enregistre un document dans le dossier du matricule (un appel par fichier)
  *  3. finalize → clôt le dépôt
  */
@@ -30,12 +31,14 @@ function doPost(e) {
 
 function openDossier_(req) {
   if (req.website) throw new Error('Requête refusée.'); // champ piège anti-robot
+  const typeKey = String(req.type || '');
+  if (!CONFIG.TYPES[typeKey]) throw new Error('Veuillez choisir le type de demande (aide ou prêt).');
   const email = String(req.email || '').trim().toLowerCase();
   const phone = phoneKey_(req.telephone);
   const wanted = String(req.matricule || '').trim().toUpperCase();
   if (!email || !phone) throw new Error('Veuillez indiquer votre email et votre numéro WhatsApp.');
 
-  let matches = findDossiers_(email, phone);
+  let matches = findDossiers_(typeKey, email, phone);
   if (wanted) matches = matches.filter(function (m) { return m.matricule === wanted; });
   if (!matches.length) {
     throw new Error('Aucun dossier trouvé avec ces informations. Utilisez l\'email et le numéro WhatsApp ' +
@@ -56,32 +59,47 @@ function openDossier_(req) {
   return { matricule: m.matricule, token: token, documents: count };
 }
 
-/** Recherche dans les fichiers de réponses les envois correspondant à cet email + téléphone. */
-function findDossiers_(email, phone) {
-  const found = [];
-  Object.keys(CONFIG.TYPES).forEach(function (k) {
-    const t = CONFIG.TYPES[k];
-    const sheet = responseSheet_(SpreadsheetApp.openById(t.responseSheetId));
-    if (sheet.getLastRow() < 2) return;
-    const values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
-    const headers = values[0].map(function (h) { return String(h).trim().toLowerCase(); });
-    const col = function (prefix) {
-      return headers.findIndex(function (h) { return h.indexOf(prefix.toLowerCase()) === 0; });
-    };
-    const cEmail = col(t.questions.email);
-    const cPhone = col(t.questions.telephone);
-    const cMat = headers.indexOf(CONFIG.MATRICULE_HEADER.toLowerCase());
-    if (cEmail < 0 || cPhone < 0 || cMat < 0) return;
+/**
+ * Recherche dans le fichier de réponses du type choisi les envois correspondant à cet email + téléphone.
+ * Si la demande a été remplie par une tierce personne (thirdParty), on compare avec ses coordonnées.
+ */
+function findDossiers_(typeKey, email, phone) {
+  const t = CONFIG.TYPES[typeKey];
+  const sheet = responseSheet_(SpreadsheetApp.openById(t.responseSheetId));
+  if (sheet.getLastRow() < 2) return [];
+  const values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+  const headers = values[0].map(normalizeTitle_);
+  const col = function (title) { return title ? headers.indexOf(normalizeTitle_(title)) : -1; };
 
-    values.slice(1).forEach(function (r) {
-      const matricule = String(r[cMat] || '').trim().toUpperCase();
-      if (!matricule) return;
-      if (String(r[cEmail]).trim().toLowerCase() !== email || phoneKey_(r[cPhone]) !== phone) return;
-      const date = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'dd/MM/yyyy') : '';
-      found.push({ matricule: matricule, typeKey: k, label: t.label, date: date });
-    });
+  const cMat = col(CONFIG.MATRICULE_HEADER);
+  const member = { email: col(t.contacts.email), phone: col(t.contacts.telephone) };
+  const tp = t.thirdParty;
+  const third = tp ? { question: col(tp.question), email: col(tp.email), phone: col(tp.telephone) } : null;
+  if (cMat < 0 || member.email < 0 || member.phone < 0) {
+    throw new Error('Colonnes introuvables dans le fichier de réponses « ' + t.label + ' » : vérifiez Config.');
+  }
+
+  const found = [];
+  values.slice(1).forEach(function (r) {
+    const matricule = String(r[cMat] || '').trim().toUpperCase();
+    if (!matricule) return;
+
+    let c = member;
+    if (third && third.question >= 0 && normalizeTitle_(r[third.question]) === normalizeTitle_(tp.answer) &&
+        String(r[third.email] || '').trim() && String(r[third.phone] || '').trim()) {
+      c = third;
+    }
+    if (String(r[c.email]).trim().toLowerCase() !== email || phoneKey_(r[c.phone]) !== phone) return;
+
+    const date = r[0] instanceof Date ? Utilities.formatDate(r[0], Session.getScriptTimeZone(), 'dd/MM/yyyy') : '';
+    found.push({ matricule: matricule, typeKey: typeKey, label: t.label, date: date });
   });
   return found.reverse(); // le plus récent en premier
+}
+
+/** 1re ligne de l'intitulé, sans casse, espaces superflus ni « : » final. */
+function normalizeTitle_(value) {
+  return String(value == null ? '' : value).split('\n')[0].toLowerCase().replace(/\s+/g, ' ').replace(/\s*:\s*$/, '').trim();
 }
 
 function uploadFile_(req) {
@@ -112,10 +130,13 @@ function finalizeDossier_(req) {
   return { documents: count };
 }
 
-/** 9 derniers chiffres du numéro : tolère les variantes d'écriture (+237, 00237, espaces…). */
+/**
+ * 8 derniers chiffres du numéro : tolère les variantes d'écriture (+237, 00237, 0 initial, espaces…),
+ * y compris pour les pays aux numéros à 8 chiffres (ex. Gabon).
+ */
 function phoneKey_(value) {
   const digits = String(value || '').replace(/\D/g, '');
-  return digits.length >= 8 ? digits.slice(-9) : '';
+  return digits.length >= 8 ? digits.slice(-8) : '';
 }
 
 function countFiles_(folder) {

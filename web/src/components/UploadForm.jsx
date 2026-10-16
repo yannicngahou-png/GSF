@@ -6,11 +6,16 @@ import FileDrop from './FileDrop.jsx';
 
 /**
  * Espace de dépôt en deux étapes :
- *  1. identification (email + n° WhatsApp du formulaire) → affiche le matricule ;
+ *  1. identification (type de demande + email + n° WhatsApp du formulaire) → affiche le matricule ;
  *  2. dépôt des documents dans le dossier du matricule.
  */
 export default function UploadForm({ initial, onBack, onDone }) {
-  const [ident, setIdent] = useState({ email: initial.email || '', telephone: initial.telephone || '', website: '' });
+  const [ident, setIdent] = useState({
+    type: initial.type || '',
+    email: initial.email || '',
+    telephone: initial.telephone || '',
+    website: '',
+  });
   const [session, setSession] = useState(null); // { matricule, token, type, documents }
   const [choices, setChoices] = useState(null);
   const [items, setItems] = useState([]);
@@ -25,6 +30,7 @@ export default function UploadForm({ initial, onBack, onDone }) {
   async function identify(e, matricule) {
     e?.preventDefault();
     if (busy) return;
+    if (!ident.type) return setError('Veuillez choisir le type de demande.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ident.email.trim())) return setError('Adresse email invalide.');
     if (ident.telephone.replace(/\D/g, '').length < 8) return setError('Numéro WhatsApp invalide.');
 
@@ -78,7 +84,7 @@ export default function UploadForm({ initial, onBack, onDone }) {
         matricule: session.matricule,
         sent: items.length,
         documents: fin.documents,
-        ident: { email: ident.email, telephone: ident.telephone },
+        ident: { type: ident.type, email: ident.email, telephone: ident.telephone },
       });
     } catch (err) {
       setError(err.message || 'Une erreur est survenue.');
@@ -88,7 +94,7 @@ export default function UploadForm({ initial, onBack, onDone }) {
     }
   }
 
-  const type = session && TYPE_BY_PREFIX[session.matricule.split('_')[0]];
+  const type = (session && TYPE_BY_PREFIX[session.matricule.split('_')[0]]) || ident.type;
   const documents = type ? CONTENT.types[type].documents : [];
 
   return (
@@ -103,6 +109,18 @@ export default function UploadForm({ initial, onBack, onDone }) {
           <p className="muted intro">{CONTENT.upload.text}</p>
           <fieldset disabled={busy}>
             <legend>1. Identifiez-vous</legend>
+            <div className="type-switch" role="radiogroup" aria-label="Type de demande">
+              {['assistance', 'pret'].map((t) => (
+                <label key={t} className={'type-option' + (ident.type === t ? ' is-active' : '')}>
+                  <input type="radio" name="type" value={t} checked={ident.type === t}
+                    onChange={() => { setIdent((f) => ({ ...f, type: t })); setChoices(null); }} />
+                  {CONTENT.types[t].title}
+                </label>
+              ))}
+            </div>
+            {ident.type && CONTENT.upload.hints[ident.type] && (
+              <p className="field-hint">{CONTENT.upload.hints[ident.type]}</p>
+            )}
             <div className="row">
               <label>
                 Email *
@@ -111,7 +129,7 @@ export default function UploadForm({ initial, onBack, onDone }) {
               <label>
                 N° WhatsApp *
                 <input type="tel" value={ident.telephone} onChange={set('telephone')} maxLength={40}
-                  placeholder="+237 6XX XX XX XX" autoComplete="tel" />
+                  placeholder="+33 XX XX XX XX" autoComplete="tel" />
               </label>
             </div>
             <label className="hp" aria-hidden="true">

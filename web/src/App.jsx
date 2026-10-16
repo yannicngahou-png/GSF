@@ -50,7 +50,8 @@ export default function App() {
       <Header onHome={() => setView('home')} />
       {DEMO_MODE && (
         <div className="demo-banner">
-          Mode démo : aucun fichier n'est envoyé. Renseignez <code>VITE_APPS_SCRIPT_URL</code> pour activer l'envoi.
+          Mode démo : matricule fictif, aucun fichier n'est envoyé. Renseignez <code>VITE_APPS_SCRIPT_URL</code> dans
+          <code>web/.env.local</code> pour brancher la page sur Apps Script.
         </div>
       )}
       <main className="wrap">

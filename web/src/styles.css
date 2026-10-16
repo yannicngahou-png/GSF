@@ -122,6 +122,11 @@ input.mono { font-family: ui-monospace, Consolas, monospace; text-transform: upp
 .matricule-box { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 20px 0; padding: 18px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--line); }
 .matricule-box code { font-size: clamp(1.1rem, 4vw, 1.5rem); font-weight: 700; letter-spacing: .04em; word-break: break-all; }
 .intro { margin-top: 0; }
+.type-switch { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.type-option { display: flex; align-items: center; gap: 10px; margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 600; }
+.type-option.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.type-option input { accent-color: var(--accent); }
+.field-hint { margin: 0 0 14px; font-size: .9rem; color: var(--muted); }
 .matricule-found { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; margin-bottom: 28px; padding: 18px; border-radius: var(--radius); background: var(--accent-soft); }
 .matricule-found span { font-weight: 600; color: var(--muted); font-size: .9rem; }
 .matricule-found code { font-size: clamp(1.1rem, 4vw, 1.5rem); font-weight: 700; letter-spacing: .04em; color: var(--primary); word-break: break-all; }
