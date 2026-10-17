@@ -2,14 +2,21 @@
  * À chaque envoi d'un formulaire :
  *  1. attribue le matricule (PREFIX_AAAAMMJJ_00001) ;
  *  2. l'inscrit dans la colonne « Matricule du dossier » de la réponse ;
- *  3. crée le dossier Drive portant ce matricule.
+ *  3. crée le dossier Drive portant ce matricule ;
+ *  4. (demande d'aide) copie la réponse dans « Nouveaux dossiers » (voir CircuitAide.gs).
  */
 function onFormSubmitHandler(e) {
+  if (!e || !e.range) {
+    throw new Error('Cette fonction se lance automatiquement à chaque envoi du formulaire : ne l\'exécutez pas ' +
+      'à la main. Pour traiter les réponses restées sans matricule, exécutez « rattraper ».');
+  }
   const sheet = e.range.getSheet();
-  const typeKey = Object.keys(CONFIG.TYPES).find(function (k) {
-    return CONFIG.TYPES[k].responseSheetId === sheet.getParent().getId();
-  });
-  if (!typeKey) return;
+  const ssId = sheet.getParent().getId();
+  const typeKey = Object.keys(CONFIG.TYPES).find(function (k) { return responseSheetId_(k) === ssId; });
+  if (!typeKey) {
+    throw new Error('Fichier de réponses « ' + sheet.getParent().getName() + ' » (' + ssId + ') non reconnu : ' +
+      'vérifiez le fichier Identifiants.');
+  }
   const type = CONFIG.TYPES[typeKey];
   const row = e.range.getRow();
 
@@ -23,10 +30,33 @@ function onFormSubmitHandler(e) {
     const matricule = nextMatricule_(typeKey);
     cell.setValue(matricule);
     SpreadsheetApp.flush();
-    DriveApp.getFolderById(type.folderId).createFolder(matricule);
+    DriveApp.getFolderById(folderId_(typeKey)).createFolder(matricule);
+
+    // Circuit des demandes d'aide : copie dans « Nouveaux dossiers ».
+    if (typeKey === 'assistance') aideVersNouveauxDossiers_(sheet, row);
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * À exécuter à la main : traite les réponses restées sans matricule (ex. envoyées pendant une panne),
+ * comme si elles venaient d'arriver. Le matricule porte la date du jour du rattrapage.
+ */
+function rattraper() {
+  Object.keys(CONFIG.TYPES).forEach(function (k) {
+    const sheet = responseSheet_(SpreadsheetApp.openById(responseSheetId_(k)));
+    const col = matriculeColumn_(sheet);
+    if (sheet.getLastRow() < 2) return;
+    const values = sheet.getRange(2, col, sheet.getLastRow() - 1, 1).getValues();
+    let n = 0;
+    values.forEach(function (v, i) {
+      if (String(v[0]).trim()) return;
+      onFormSubmitHandler({ range: sheet.getRange(i + 2, 1) });
+      n++;
+    });
+    Logger.log(CONFIG.TYPES[k].label + ' : ' + n + ' réponse(s) rattrapée(s).');
+  });
 }
 
 /** Date du jour + compteur propre à chaque type, qui augmente à chaque souscription. */

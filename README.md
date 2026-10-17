@@ -16,10 +16,12 @@ Landing page (Vercel)                 Google Apps Script                     Goo
 
 | Fichier | Rôle |
 |---|---|
-| [apps-script/Config.gs](apps-script/Config.gs) | Dossiers Drive, fichiers de réponses, préfixes des matricules |
+| [apps-script/Identifiants.gs](apps-script/Identifiants.gs) | ⚠ Vos identifiants : fichiers de réponses, fichier Finance, dossiers Drive. **À ne jamais remplacer** |
+| [apps-script/Config.gs](apps-script/Config.gs) | Préfixes des matricules, questions du formulaire, circuit des cellules |
 | [apps-script/Installation.gs](apps-script/Installation.gs) | `installer()` : vérifie les accès et pose les déclencheurs |
 | [apps-script/Reception.gs](apps-script/Reception.gs) | À l'envoi d'un formulaire : matricule + dossier Drive |
 | [apps-script/Depot.gs](apps-script/Depot.gs) | Web app de l'espace de dépôt des documents |
+| [apps-script/CircuitAide.gs](apps-script/CircuitAide.gs) | Circuit des demandes d'aide entre cellules |
 | [web/src/content.js](web/src/content.js) | ✏️ Textes, couleurs, logo de la landing page |
 | [web/src/config.js](web/src/config.js) | Liens des formulaires, limites de téléversement |
 | [plus-tard/](plus-tard/) | Ébauche du circuit entre cellules (inutilisée pour l'instant) |
@@ -38,20 +40,72 @@ Landing page (Vercel)                 Google Apps Script                     Goo
 
 Aucun email n'est envoyé. Les informations restent dans les fichiers de réponses des formulaires.
 
+## Circuit des demandes d'aide
+
+```
+Fichier de réponses « aide »                                         Fichier Finance
+──────────────────────────────────────────────────────────           ───────────────
+Formulaire ──(à l'envoi)──► Nouveaux dossiers                        
+                            Statut : En cours d'examen ▾
+                                     Pièces attendues
+                                     Validé ─────────┬──► Dossiers Validés
+                                       │             └──────────────────────────► Aides
+                                       │               + « Statut analyse » = Validé
+                                       │               + « Date de validation » = date du jour
+                                     Refusé ──────────► Dossiers refusés
+                                                       + « Statut analyse » = Refusé
+                                                       + « Date de refus » = date du jour
+```
+
+- **À l'arrivée d'une réponse** : la ligne de « Formulaire » est copiée dans « Nouveaux dossiers », sauf la colonne
+  « Déclaration du membre… », avec le statut « En cours d'examen ».
+- **Quand un analyste choisit « Validé »** : la ligne de « Nouveaux dossiers » est copiée dans « Dossiers Validés »
+  et dans la feuille « Aides » du fichier Finance. La colonne « Statut » y devient « Statut analyse », et la date
+  de validation est ajoutée automatiquement.
+- **Quand un analyste choisit « Refusé »** : la ligne est copiée dans « Dossiers refusés », avec « Statut analyse »
+  et la date de refus.
+- Statuts et destinations se règlent dans `statusRules` : une règle par statut, avec ses feuilles et sa colonne de date.
+- Les colonnes sont associées **par leur nom**, quel que soit leur ordre. Les colonnes sans équivalent (analystes,
+  finance) ne sont jamais écrasées. `installer` affiche dans le journal la liste de ces colonnes.
+- Un dossier n'est jamais copié deux fois dans une même feuille (contrôle sur le matricule).
+- La ligne reste dans « Nouveaux dossiers » après la décision. Si l'analyste passe de « Validé » à « Refusé », ou
+  l'inverse, le dossier est **retiré** des feuilles de l'ancienne décision (y compris « Aides » côté Finance) et copié
+  dans celles de la nouvelle, avec une nouvelle date. Un retour à « En cours d'examen » ou « Pièces attendues »
+  ne retire rien.
+- **Archivage** : quand « Archiver le dossier » passe à **« Oui »**, le dossier est copié dans le **fichier des
+  Archives**, puis retiré de « Nouveaux dossiers ». Il reste dans la feuille où « Oui » a été choisi.
+  - « Dossiers refusés » → feuille **« Aides refusées »** des Archives ;
+  - « Aides » (Finance) → feuille **« Aides validées »** des Archives, **seulement si « Status » = « Clôturé »**.
+    Sinon, « Archiver le dossier » repasse à « Pas encore », avec une note qui explique pourquoi.
+
+  La date d'archivage est notée si la colonne « Date d'archivage » existe dans la feuille d'archives.
+  Le **dossier Drive du matricule** (les documents) est **déplacé** dans le dossier « Documents Aides », placé
+  dans le même dossier que le fichier des Archives (ou désigné par `dossierDocumentsAides` dans Identifiants).
+  Ses liens restent valides après le déplacement.
+- **Valeurs par défaut** à l'arrivée d'un dossier : « Archiver le dossier » = « Pas encore » (Dossiers refusés,
+  Aides Finance) et « Status » = « En Attente » (Aides Finance).
+- **« Date de réception »** reprend le « Timestamp » de « Formulaire » (réglage `columnAliases`). Les accents et
+  les majuscules ne comptent pas dans les noms de colonnes.
+
+Réglages dans le bloc `CIRCUIT_AIDE` de [Config.gs](apps-script/Config.gs) : noms des feuilles et des colonnes,
+statuts et destinations. L'identifiant du fichier Finance se trouve dans [Identifiants.gs](apps-script/Identifiants.gs).
+
 ## Installation d'Apps Script
 
 1. https://script.google.com → **Nouveau projet** → renommez-le **GSF - Réception**.
 2. **Paramètres du projet** (roue dentée) → cochez « Afficher le fichier manifeste "appsscript.json" dans l'éditeur ».
 3. Dans l'**Éditeur**, créez les fichiers suivants et collez-y leur contenu. Ne tapez pas l'extension « .gs » :
    Apps Script l'ajoute tout seul.
-   - `Code.gs` → renommez-le **Config** → [Config.gs](apps-script/Config.gs)
+   - `Code.gs` → renommez-le **Identifiants** → [Identifiants.gs](apps-script/Identifiants.gs)
+     (⚠ à remplir une fois, puis **à ne jamais remplacer** lors des mises à jour)
+   - **+** → Script → **Config** → [Config.gs](apps-script/Config.gs)
    - **+** → Script → **Installation** → [Installation.gs](apps-script/Installation.gs)
    - **+** → Script → **Reception** → [Reception.gs](apps-script/Reception.gs)
    - **+** → Script → **Depot** → [Depot.gs](apps-script/Depot.gs)
+   - **+** → Script → **CircuitAide** → [CircuitAide.gs](apps-script/CircuitAide.gs)
    - `appsscript.json` → remplacez tout le contenu par [appsscript.json](apps-script/appsscript.json)
-4. Dans **Config**, collez l'identifiant de chaque fichier de réponses dans `responseSheetId`. Pour le trouver :
-   formulaire → *Réponses* → *Afficher dans Sheets* → c'est la partie entre `/d/` et `/edit` dans l'adresse.
-   Enregistrez avec **Ctrl+S**.
+4. Dans **Identifiants**, collez les identifiants des 2 fichiers de réponses et du fichier Finance. L'identifiant
+   est la partie entre `/d/` et `/edit` dans l'adresse du fichier. Enregistrez avec **Ctrl+S**.
 5. Choisissez la fonction **`installer`** → **Exécuter** → acceptez les autorisations. Au message « Google n'a pas
    validé cette application » : *Paramètres avancés* → *Accéder à GSF - Réception*.
    Le journal doit afficher vos deux dossiers et vos deux fichiers de réponses, puis « ✅ Installation terminée ».
@@ -61,7 +115,7 @@ Aucun email n'est envoyé. Les informations restent dans les fichiers de répons
    Accès : **Tout le monde** → **Déployer** → copiez l'URL qui se termine par `/exec`.
 
 > Après une modification du code de **Depot** : *Déployer → Gérer les déploiements → Modifier → Nouvelle version*.
-> Après une modification de `responseSheetId` : relancez `installer`.
+> Après une modification de **Identifiants** : relancez `installer`.
 
 ## Formulaires
 

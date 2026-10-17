@@ -49,7 +49,7 @@ function openDossier_(req) {
   }
 
   const m = matches[0];
-  const parent = DriveApp.getFolderById(CONFIG.TYPES[m.typeKey].folderId);
+  const parent = DriveApp.getFolderById(folderId_(m.typeKey));
   const it = parent.getFoldersByName(m.matricule);
   const folder = it.hasNext() ? it.next() : parent.createFolder(m.matricule);
 
@@ -65,7 +65,7 @@ function openDossier_(req) {
  */
 function findDossiers_(typeKey, email, phone) {
   const t = CONFIG.TYPES[typeKey];
-  const sheet = responseSheet_(SpreadsheetApp.openById(t.responseSheetId));
+  const sheet = responseSheet_(SpreadsheetApp.openById(responseSheetId_(typeKey)));
   if (sheet.getLastRow() < 2) return [];
   const values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
   const headers = values[0].map(normalizeTitle_);
