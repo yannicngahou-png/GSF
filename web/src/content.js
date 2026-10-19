@@ -137,5 +137,5 @@ export const CONTENT = {
   },
 
   consent: "Je certifie l'exactitude des documents transmis.",
-  footer: 'Global Social Funds — Tontard / Akiba Invest',
+  footer: 'Global Social Funds — Tontard',
 };
