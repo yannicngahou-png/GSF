@@ -30,6 +30,13 @@
 
 /** Les circuits actifs. */
 function circuits_() {
+  const missing = [];
+  if (typeof CIRCUIT_AIDE !== 'function') missing.push('CircuitAide (fonction CIRCUIT_AIDE)');
+  if (typeof CIRCUIT_PRET !== 'function') missing.push('CircuitPret (fonction CIRCUIT_PRET)');
+  if (missing.length) {
+    throw new Error('Fichier(s) absent(s) ou ancienne version : ' + missing.join(', ') + '. Collez le contenu actuel de ' +
+      'CircuitAide.gs et CircuitPret.gs, et supprimez l\'ancien fichier « Circuits » s\'il existe.');
+  }
   return { aide: CIRCUIT_AIDE(), pret: CIRCUIT_PRET() };
 }
 

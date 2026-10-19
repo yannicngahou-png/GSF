@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { CONTENT } from '../content.js';
-import { MIN_FILES, TYPE_BY_PREFIX } from '../config.js';
+import { ALLOWED_EXTENSIONS, MAX_FILE_MB, MAX_FILES, TYPE_BY_PREFIX } from '../config.js';
 import { finalizeDossier, openDossier, uploadFile } from '../api.js';
 import FileDrop from './FileDrop.jsx';
 
 /**
  * Espace de dépôt en deux étapes :
  *  1. identification (type de demande + email + n° WhatsApp du formulaire) → affiche le matricule ;
- *  2. dépôt des documents dans le dossier du matricule.
+ *  2. dépôt des documents : une zone par document attendu (CONTENT.types[type].documents).
  */
 export default function UploadForm({ initial, onBack, onDone }) {
   const [ident, setIdent] = useState({
@@ -16,16 +16,37 @@ export default function UploadForm({ initial, onBack, onDone }) {
     telephone: initial.telephone || '',
     website: '',
   });
-  const [session, setSession] = useState(null); // { matricule, token, type, documents }
+  const [session, setSession] = useState(null); // { matricule, token, documents }
   const [choices, setChoices] = useState(null);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([]); // { id, doc (index), file, status, error }
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ ratio: 0, text: '' });
 
+  const type = (session && TYPE_BY_PREFIX[session.matricule.split('_')[0]]) || ident.type;
+  const documents = type ? CONTENT.types[type].documents : [];
+
   const set = (name) => (e) => setIdent((f) => ({ ...f, [name]: e.target.value }));
   const updateItem = (id, patch) => setItems((list) => list.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+
+  /** Ajoute des fichiers à la rubrique `doc`, après contrôle du format, de la taille et du nombre. */
+  function addFiles(doc, list) {
+    const errors = [];
+    setItems((current) => {
+      const next = [...current];
+      Array.from(list).forEach((file) => {
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) return errors.push(`${file.name} : format non autorisé`);
+        if (file.size > MAX_FILE_MB * 1024 * 1024) return errors.push(`${file.name} : dépasse ${MAX_FILE_MB} Mo`);
+        if (next.some((i) => i.doc === doc && i.file.name === file.name && i.file.size === file.size)) return;
+        if (next.length >= MAX_FILES) return errors.push(`Maximum ${MAX_FILES} fichiers au total`);
+        next.push({ id: crypto.randomUUID(), doc, file, status: 'pending' });
+      });
+      return next;
+    });
+    setError(errors.join('\n'));
+  }
 
   async function identify(e, matricule) {
     e?.preventDefault();
@@ -54,19 +75,26 @@ export default function UploadForm({ initial, onBack, onDone }) {
   async function upload(e) {
     e.preventDefault();
     if (busy) return;
-    if (items.length < MIN_FILES) return setError(`Veuillez ajouter au moins ${MIN_FILES} document.`);
+    const missing = documents.filter((d, i) => d.required && !items.some((it) => it.doc === i));
+    if (missing.length) {
+      return setError('Documents obligatoires manquants :\n' + missing.map((d) => '• ' + d.label).join('\n'));
+    }
+    if (!items.length) return setError('Veuillez ajouter au moins un document.');
     if (!consent) return setError('Veuillez cocher la case de certification.');
 
     setError('');
     setBusy(true);
     try {
-      let done = items.filter((i) => i.status === 'done').length;
+      // Envoi dans l'ordre des rubriques ; le nom du fichier commence par celui du document.
+      const ordered = [...items].sort((a, b) => a.doc - b.doc);
+      let done = ordered.filter((i) => i.status === 'done').length;
       let failed = 0;
-      for (const item of items.filter((i) => i.status !== 'done')) {
-        setProgress({ ratio: done / items.length, text: `Envoi de « ${item.file.name} » (${done + 1}/${items.length})…` });
+      for (const item of ordered.filter((i) => i.status !== 'done')) {
+        const doc = documents[item.doc];
+        setProgress({ ratio: done / items.length, text: `${doc.label} : « ${item.file.name} » (${done + 1}/${items.length})…` });
         updateItem(item.id, { status: 'uploading', error: null });
         try {
-          await uploadFile(session, item.file);
+          await uploadFile(session, item.file, `${doc.prefix} - ${item.file.name}`);
           updateItem(item.id, { status: 'done' });
           done++;
         } catch (err) {
@@ -93,9 +121,6 @@ export default function UploadForm({ initial, onBack, onDone }) {
       setBusy(false);
     }
   }
-
-  const type = (session && TYPE_BY_PREFIX[session.matricule.split('_')[0]]) || ident.type;
-  const documents = type ? CONTENT.types[type].documents : [];
 
   return (
     <section>
@@ -167,15 +192,46 @@ export default function UploadForm({ initial, onBack, onDone }) {
 
           <fieldset>
             <legend>2. Vos documents</legend>
-            {documents.length > 0 && (
-              <div className="doc-hint">
-                <p>Documents à fournir — {CONTENT.types[type].title} :</p>
-                <ul>
-                  {documents.map((d) => <li key={d}>{d}</li>)}
-                </ul>
-              </div>
-            )}
-            <FileDrop items={items} onChange={setItems} onError={setError} disabled={busy} />
+            <p className="field-hint">
+              {ALLOWED_EXTENSIONS.join(', ').toUpperCase()} — {MAX_FILE_MB} Mo max par fichier.
+              Les documents marqués <strong className="req">*</strong> sont obligatoires.
+            </p>
+            <ol className="doc-slots">
+              {documents.map((d, i) => {
+                const slotItems = items.filter((it) => it.doc === i);
+                return (
+                  <li key={d.prefix} className={'doc-slot' + (slotItems.length ? ' is-filled' : '')}>
+                    <div className="doc-slot-head">
+                      <span className="doc-slot-num">{slotItems.length ? '✓' : i + 1}</span>
+                      <div>
+                        <p className="doc-slot-label">
+                          {d.label} {d.required ? <strong className="req">*</strong> : <span className="opt">(facultatif)</span>}
+                        </p>
+                        {d.hint && <p className="doc-slot-hint">{d.hint}</p>}
+                        {d.template && (
+                          <a className="btn btn-gold btn-template" href={d.template.url}
+                            {...(d.template.url.startsWith('/')
+                              ? { download: d.template.url.split('/').pop() }  // fichier du site : téléchargement direct
+                              : { target: '_blank', rel: 'noopener noreferrer' })}>
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path fill="currentColor" d="M11 4h2v8.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V4zM5 18h14v2H5v-2z" />
+                            </svg>
+                            {d.template.label}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <FileDrop
+                      compact
+                      items={slotItems}
+                      disabled={busy}
+                      onAdd={(list) => addFiles(i, list)}
+                      onRemove={(id) => setItems((list) => list.filter((it) => it.id !== id))}
+                    />
+                  </li>
+                );
+              })}
+            </ol>
           </fieldset>
 
           <label className="consent">

@@ -37,12 +37,13 @@ export function openDossier(fields) {
   return call({ action: 'open', ...fields });
 }
 
-export async function uploadFile(session, file) {
+/** `name` : nom du fichier enregistré dans Drive (par défaut, le nom d'origine). */
+export async function uploadFile(session, file, name) {
   const payload = {
     action: 'upload',
     matricule: session.matricule,
     token: session.token,
-    name: file.name,
+    name: name || file.name,
     mimeType: file.type || 'application/octet-stream',
     data: await toBase64(file),
   };

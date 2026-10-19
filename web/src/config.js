@@ -16,6 +16,5 @@ export const TYPE_BY_PREFIX = { GSF: 'assistance', PAFIS: 'pret' };
 
 // Doivent correspondre à CONFIG dans apps-script/Config.gs.
 export const MAX_FILE_MB = 10;
-export const MAX_FILES = 15;
-export const MIN_FILES = 1;
+export const MAX_FILES = 30;
 export const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];

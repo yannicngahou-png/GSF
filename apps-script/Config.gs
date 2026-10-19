@@ -33,7 +33,7 @@ const CONFIG = {
 
   // Dépôt des documents (doit correspondre à web/src/config.js).
   MAX_FILE_MB: 10,
-  MAX_FILES: 15,
+  MAX_FILES: 30,
   ALLOWED_EXTENSIONS: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'],
 
   // Colonnes qui portent un autre nom dans la feuille de destination :
