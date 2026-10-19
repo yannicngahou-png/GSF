@@ -4,25 +4,29 @@
  * En local (`npm run dev`), la page se met à jour dès que vous enregistrez.
  */
 
-// Couleurs (codes hexadécimaux, ex. choisis sur https://htmlcolorcodes.com/fr/)
+// Couleurs de la charte Global Social Funds (codes hexadécimaux)
 export const THEME = {
-  primary: '#1f3a5f',     // bandeau du haut, titres
-  accent: '#1f8a5b',      // boutons, icônes, liens
-  accentSoft: '#e7f4ed',  // fond des icônes et zones survolées
-  background: '#f5f7fa',  // fond de page
-  text: '#14233a',        // texte principal
-  muted: '#5b6b80',       // texte secondaire
+  primary: '#04533D',      // vert du bandeau : boutons, bandeaux
+  primaryDark: '#02422A',  // vert foncé du logo : titres, pied de page
+  green: '#0D7E52',        // vert vif : icônes, survols
+  gold: '#F4C127',         // jaune doré : accents, soulignés, bouton de dépôt
+  background: '#FAF6ED',   // fond crème
+  text: '#1F2D27',         // texte principal
+  muted: '#5E6B63',        // texte secondaire
 };
 
 export const CONTENT = {
-  orgName: 'GSF',
-  // Remplacez web/public/logo.svg par votre logo (ou déposez logo.png et écrivez '/logo.png').
-  // Mettez null pour n'afficher que le nom.
-  logo: '/logo.svg',
-  tagline: 'Dépôt de dossiers de financement',
+  orgName: 'Global Social Funds',
+  // Logo : web/public/logo.png (mettez null pour n'afficher que le nom).
+  logo: '/logo.png',
+  tagline: 'Ensemble pour un impact durable',
+  // Devise affichée en écriture manuscrite.
+  motto: ['Solidarité', 'Soutien', 'Progrès'],
 
   hero: {
+    kicker: 'Dépôt de dossiers',
     title: 'Déposez votre demande',
+    highlight: "d'aide ou de prêt",
     text:
       'Choisissez le type de demande et remplissez le formulaire. Revenez ensuite sur cette page, rubrique ' +
       '« Déposer mes documents » : votre matricule de dossier s\'affichera et vous pourrez déposer vos pièces.',
@@ -80,5 +84,5 @@ export const CONTENT = {
   },
 
   consent: "Je certifie l'exactitude des documents transmis.",
-  footer: 'GSF — Tontard / Akiba Invest',
+  footer: 'Global Social Funds — Tontard / Akiba Invest',
 };

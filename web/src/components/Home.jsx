@@ -16,16 +16,42 @@ const ICONS = {
 export default function Home({ onUpload }) {
   return (
     <section>
+      {/* Bandeau « coup de pinceau » */}
       <div className="hero">
-        <h1>{CONTENT.hero.title}</h1>
+        <div className="brush">
+          <svg className="hero-megaphone" viewBox="0 0 64 64" aria-hidden="true">
+            <path className="ray" d="M50 14l6-6M54 26h8M50 38l6 6" />
+            <path className="horn" d="M8 26h8l24-14v40L16 38H8z" />
+            <path className="handle" d="M16 38l4 14h7l-3-13" />
+          </svg>
+          <div className="brush-content">
+            <p className="hero-kicker">{CONTENT.hero.kicker}</p>
+            <h1>
+              {CONTENT.hero.title}
+              <span className="hero-highlight">{CONTENT.hero.highlight}</span>
+            </h1>
+            <p className="hero-script">{CONTENT.tagline}</p>
+          </div>
+        </div>
         <p className="lead">{CONTENT.hero.text}</p>
       </div>
 
+      {/* Étapes */}
+      <ol className="steps-overview">
+        {CONTENT.steps.map((s, i) => (
+          <li key={s}>
+            <span className="step-num">{i + 1}</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ol>
+
+      {/* Les deux demandes */}
       <div className="choices">
         {['assistance', 'pret'].map((t) => {
           const c = CONTENT.types[t];
           return (
-            <a key={t} className="choice" href={FORMS[t]} target="_blank" rel="noopener noreferrer">
+            <a key={t} className={'choice choice-' + t} href={FORMS[t]} target="_blank" rel="noopener noreferrer">
               <span className="choice-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="28" height="28">{ICONS[t]}</svg>
               </span>
@@ -37,15 +63,8 @@ export default function Home({ onUpload }) {
         })}
       </div>
 
-      <ol className="steps-overview">
-        {CONTENT.steps.map((s, i) => (
-          <li key={s}>
-            <b>{i + 1}.</b> {s}
-          </li>
-        ))}
-      </ol>
-
-      <button type="button" className="choice upload-card" onClick={onUpload}>
+      {/* Dépôt des documents */}
+      <button type="button" className="upload-card" onClick={onUpload}>
         <span className="choice-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="28" height="28">{ICONS.upload}</svg>
         </span>
@@ -53,7 +72,7 @@ export default function Home({ onUpload }) {
           <span className="choice-title">{CONTENT.uploadCard.title}</span>
           <span className="choice-text">{CONTENT.uploadCard.text}</span>
         </span>
-        <span className="choice-cta">{CONTENT.uploadCard.cta} →</span>
+        <span className="btn btn-gold">{CONTENT.uploadCard.cta} →</span>
       </button>
     </section>
   );

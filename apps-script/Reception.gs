@@ -3,7 +3,7 @@
  *  1. attribue le matricule (PREFIX_AAAAMMJJ_00001) ;
  *  2. l'inscrit dans la colonne « Matricule du dossier » de la réponse ;
  *  3. crée le dossier Drive portant ce matricule ;
- *  4. (demande d'aide) copie la réponse dans « Nouveaux dossiers » (voir CircuitAide.gs).
+ *  4. copie la réponse dans la 1re cellule du circuit (voir MoteurCircuits.gs).
  */
 function onFormSubmitHandler(e) {
   if (!e || !e.range) {
@@ -32,8 +32,8 @@ function onFormSubmitHandler(e) {
     SpreadsheetApp.flush();
     DriveApp.getFolderById(folderId_(typeKey)).createFolder(matricule);
 
-    // Circuit des demandes d'aide : copie dans « Nouveaux dossiers ».
-    if (typeKey === 'assistance') aideVersNouveauxDossiers_(sheet, row);
+    // Entrée dans le circuit de la cellule suivante (voir MoteurCircuits.gs).
+    entreeCircuit_(typeKey, sheet, row);
   } finally {
     lock.releaseLock();
   }

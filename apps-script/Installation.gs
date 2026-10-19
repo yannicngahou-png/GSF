@@ -1,11 +1,19 @@
 /**
- * À exécuter une fois, et après toute modification de Config :
+ * À exécuter une fois, et après toute modification de Config ou d'Identifiants :
  * vérifie les accès, puis installe les déclencheurs
- *  - « à l'envoi du formulaire » sur chaque fichier de réponses (matricule + dossier) ;
- *  - « à la modification » sur le fichier de réponses d'aide et sur le fichier Finance
- *    (statut des analystes, archivage).
+ *  - « à l'envoi du formulaire » sur chaque fichier de réponses (matricule + dossier + entrée dans le circuit) ;
+ *  - « à la modification » sur chaque fichier de cellule (décisions, passages, archivage).
+ * Un fichier dont l'identifiant est vide est signalé et ignoré.
  */
 function installer() {
+  // 1. Chaque identifiant doit désigner une vraie Google Sheet accessible (pas un fichier Excel importé).
+  Logger.log('— Fichiers :');
+  const bad = verifierFichiers_();
+  if (bad.length) {
+    Logger.log('❌ Installation interrompue : corrigez le(s) fichier(s) ci-dessus (' + bad.join(', ') + '), puis relancez « installer ».');
+    return;
+  }
+
   Object.keys(CONFIG.TYPES).forEach(function (k) {
     const t = CONFIG.TYPES[k];
     const folder = DriveApp.getFolderById(folderId_(k));
@@ -15,7 +23,7 @@ function installer() {
       sheet.getParent().getName() + ' (onglet « ' + sheet.getName() + ' »)');
   });
 
-  verifierCircuitAide_();
+  verifierCircuits_();
 
   const handlers = ['onFormSubmitHandler', 'onEditHandler'];
   ScriptApp.getProjectTriggers().forEach(function (tr) {
@@ -24,62 +32,98 @@ function installer() {
   Object.keys(CONFIG.TYPES).forEach(function (k) {
     ScriptApp.newTrigger('onFormSubmitHandler').forSpreadsheet(responseSheetId_(k)).onFormSubmit().create();
   });
-  // Statut (Nouveaux dossiers) et archivage (Dossiers refusés) dans le fichier de réponses d'aide,
-  // archivage dans le fichier Finance.
-  ScriptApp.newTrigger('onEditHandler').forSpreadsheet(responseSheetId_('assistance')).onEdit().create();
-  ScriptApp.newTrigger('onEditHandler').forSpreadsheet(financeSpreadsheetId_()).onEdit().create();
+  Logger.log('— Déclencheurs « à la modification » :');
+  watchedFiles_().forEach(function (f) {
+    const id = fileIdOrNull_(f);
+    if (!id) { Logger.log('  ⚠ ' + fileLabel_(f) + ' : identifiant « ' + f + ' » vide, non surveillé'); return; }
+    try {
+      ScriptApp.newTrigger('onEditHandler').forSpreadsheet(id).onEdit().create();
+      Logger.log('  ✅ ' + fileLabel_(f));
+    } catch (e) {
+      Logger.log('  ❌ ' + fileLabel_(f) + ' (' + f + ') : déclencheur impossible — ' + e.message);
+    }
+  });
 
   Logger.log('✅ Installation terminée.');
 }
 
 /**
- * À exécuter à la main en cas de problème : vérifie les déclencheurs et, pour chaque feuille d'archivage,
- * les colonnes et les lignes où « Archiver le dossier » vaut « Oui ». N'écrit rien.
+ * Vérifie chaque fichier déclaré dans Identifiants (réponses + cellules + archives) : identifiant valide,
+ * accessible, et de type Google Sheets. Écrit le résultat dans le journal ; renvoie les clés en erreur.
+ */
+function verifierFichiers_() {
+  const keys = Object.keys(CONFIG.TYPES).map(function (k) { return CONFIG.TYPES[k].responseSheetKey; })
+    .concat(watchedFiles_(), ['archives'])
+    .filter(function (k, i, all) { return all.indexOf(k) === i; });
+  const bad = [];
+  keys.forEach(function (k) {
+    const id = String(IDENTIFIANTS()[k] || '').trim();
+    if (!id) { Logger.log('  ⚠ ' + k + ' : identifiant vide (circuit correspondant inactif)'); return; }
+    const problem = problemeFichier_(id);
+    if (problem) { Logger.log('  ❌ ' + k + ' : ' + problem); bad.push(k); return; }
+    Logger.log('  ✅ ' + k + ' : « ' + SpreadsheetApp.openById(id).getName() + ' »');
+  });
+  return bad;
+}
+
+/** Explication si l'identifiant ne désigne pas une Google Sheet modifiable, sinon ''. */
+function problemeFichier_(id) {
+  if (/[\/\s]/.test(id)) return 'l\'identifiant contient « / » ou un espace : collez seulement la partie entre /d/ et /edit';
+  let file;
+  try { file = DriveApp.getFileById(id); } catch (e) { return 'fichier introuvable ou inaccessible (identifiant erroné, ou fichier non partagé avec vous)'; }
+  const mime = file.getMimeType();
+  if (mime !== MimeType.GOOGLE_SHEETS) {
+    const excel = /spreadsheetml|ms-excel/.test(mime);
+    return '« ' + file.getName() + ' » n\'est pas une Google Sheet' + (excel
+      ? ' mais un fichier Excel importé. Ouvrez-le, puis Fichier → Enregistrer au format Google Sheets, et utilisez l\'identifiant de la copie créée'
+      : ' (type : ' + mime + ')');
+  }
+  try { SpreadsheetApp.openById(id); } catch (e) { return '« ' + file.getName() + ' » ne peut pas être ouvert : ' + e.message; }
+  return '';
+}
+
+/**
+ * À exécuter à la main en cas de problème : vérifie les déclencheurs, puis feuilles, colonnes et dossiers
+ * de chaque circuit, et liste les lignes en attente d'une condition (ex. « Archiver » = Oui sans date). N'écrit rien.
  */
 function diagnostiquer() {
-  const a = CONFIG.CIRCUIT_AIDE.archiving;
   const nom = function (id) {
     try { return SpreadsheetApp.openById(id).getName(); } catch (e) { return 'fichier inaccessible (' + id + ')'; }
   };
-
   Logger.log('— Déclencheurs installés :');
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function (t) { Logger.log('  ' + t.getHandlerFunction() + ' sur « ' + nom(t.getTriggerSourceId()) + ' »'); });
   const watched = triggers.filter(function (t) { return t.getHandlerFunction() === 'onEditHandler'; })
     .map(function (t) { return t.getTriggerSourceId(); });
-  [['réponses aide', fileId_()], ['Finance', fileId_('finance')]].forEach(function (f) {
-    Logger.log((watched.indexOf(f[1]) !== -1 ? '  ✅' : '  ❌ MANQUANT :') + ' onEditHandler sur le fichier ' + f[0] +
-      (watched.indexOf(f[1]) !== -1 ? '' : ' → relancez « installer »'));
+  watchedFiles_().forEach(function (f) {
+    const id = fileIdOrNull_(f);
+    if (!id) Logger.log('  ⚠ ' + fileLabel_(f) + ' : identifiant « ' + f + ' » vide');
+    else if (watched.indexOf(id) === -1) Logger.log('  ❌ MANQUANT : onEditHandler sur ' + fileLabel_(f) + ' → relancez « installer »');
+    else Logger.log('  ✅ onEditHandler sur ' + fileLabel_(f));
   });
 
-  a.sources.forEach(function (s) {
-    Logger.log('— « ' + s.sheet + ' » (' + fileLabel_(s.file) + ') → archives « ' + s.archive.sheet + ' » :');
-    const sheet = targetSheet_(s);
-    const table = tableInfo_(sheet);
-    Logger.log('  ligne des en-têtes : ' + table.headerRow);
-    const cols = {};
-    [CONFIG.MATRICULE_HEADER, a.column].concat(s.requires ? [s.requires.column] : []).forEach(function (h) {
-      cols[h] = colIndex_(table.headers, h);
-      Logger.log('  ' + (cols[h] >= 0 ? '✅' : '❌') + ' colonne « ' + h + ' »' + (cols[h] >= 0 ? '' : ' introuvable'));
-    });
-    targetSheet_(s.archive);
-    Logger.log('  ✅ feuille d\'archives « ' + s.archive.sheet + ' » trouvée');
-    if (cols[a.column] < 0 || sheet.getLastRow() <= table.headerRow) return;
+  verifierCircuits_();
 
-    const rows = sheet.getRange(table.headerRow + 1, 1, sheet.getLastRow() - table.headerRow, table.headers.length).getValues();
-    rows.forEach(function (r) {
-      if (fullTitle_(r[cols[a.column]]) !== fullTitle_(a.yes)) return;
-      let line = '  ligne « Oui » : ' + (cols[CONFIG.MATRICULE_HEADER] >= 0 ? r[cols[CONFIG.MATRICULE_HEADER]] : '?');
-      if (s.requires && cols[s.requires.column] >= 0) {
-        const v = r[cols[s.requires.column]];
-        line += ' | ' + s.requires.column + ' = « ' + v + ' »' +
-          (fullTitle_(v) === fullTitle_(s.requires.value) ? ' ✅' : ' ❌ (doit être « ' + s.requires.value + ' »)');
+  Logger.log('— Lignes bloquées par une condition :');
+  allRules_().forEach(function (rule) {
+    rule.cases.filter(function (c) { return c.requires; }).forEach(function (c) {
+      if (!fileIdOrNull_(rule.on.file)) return;
+      const sheet = targetSheet_(rule.on);
+      const table = tableInfo_(sheet);
+      const col = colIndex_(table.headers, rule.column);
+      const mat = colIndex_(table.headers, CONFIG.MATRICULE_HEADER);
+      if (col < 0 || sheet.getLastRow() <= table.headerRow) return;
+      for (let r = table.headerRow + 1; r <= sheet.getLastRow(); r++) {
+        const v = sheet.getRange(r, col + 1).getValue();
+        if (!c.values.some(function (x) { return fullTitle_(x) === fullTitle_(v); })) continue;
+        const missing = conditionsManquantes_(sheet, r, c.requires);
+        if (missing) {
+          Logger.log('  ' + rule.on.sheet + ' (' + rule.on.file + ') ligne ' + r +
+            (mat >= 0 ? ' — ' + sheet.getRange(r, mat + 1).getValue() : '') + ' : ' + missing);
+        }
       }
-      Logger.log(line);
     });
   });
-  Logger.log('— Documents :');
-  logDocumentsFolder_();
 }
 
 /** Valeur d'Identifiants.gs ; erreur explicite si elle est vide. */
@@ -95,8 +139,6 @@ function responseSheetId_(typeKey) { return identifiant_(CONFIG.TYPES[typeKey].r
 /** Dossier Drive d'un type de demande. */
 function folderId_(typeKey) { return identifiant_(CONFIG.TYPES[typeKey].folderKey); }
 
-/** Fichier de la cellule Finance. */
-function financeSpreadsheetId_() { return identifiant_('finance'); }
 
 /** Onglet qui reçoit les réponses du formulaire. */
 function responseSheet_(ss) {

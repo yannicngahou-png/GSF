@@ -5,11 +5,14 @@ import Header from './components/Header.jsx';
 import Home from './components/Home.jsx';
 import UploadForm from './components/UploadForm.jsx';
 import Done from './components/Done.jsx';
+import Motto from './components/Motto.jsx';
 
+// Couleurs de content.js → variables CSS utilisées dans styles.css
 const CSS_VARS = {
   primary: '--primary',
-  accent: '--accent',
-  accentSoft: '--accent-soft',
+  primaryDark: '--primary-dark',
+  green: '--green',
+  gold: '--gold',
   background: '--bg',
   text: '--ink',
   muted: '--muted',
@@ -62,7 +65,17 @@ export default function App() {
         {view === 'done' && <Done result={result} onMore={uploadMore} onHome={() => setView('home')} />}
       </main>
       <footer className="footer">
-        <div className="wrap">© {new Date().getFullYear()} {CONTENT.footer}</div>
+        <div className="wrap footer-inner">
+          <div className="footer-brand">
+            {CONTENT.logo && <img src={CONTENT.logo} alt="" className="footer-logo" />}
+            <span>
+              <strong>{CONTENT.orgName}</strong>
+              <span className="footer-tagline">{CONTENT.tagline}</span>
+            </span>
+          </div>
+          <Motto className="footer-motto" />
+          <p className="footer-copy">© {new Date().getFullYear()} {CONTENT.footer}</p>
+        </div>
       </footer>
     </>
   );

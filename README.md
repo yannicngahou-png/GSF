@@ -21,7 +21,9 @@ Landing page (Vercel)                 Google Apps Script                     Goo
 | [apps-script/Installation.gs](apps-script/Installation.gs) | `installer()` : vérifie les accès et pose les déclencheurs |
 | [apps-script/Reception.gs](apps-script/Reception.gs) | À l'envoi d'un formulaire : matricule + dossier Drive |
 | [apps-script/Depot.gs](apps-script/Depot.gs) | Web app de l'espace de dépôt des documents |
-| [apps-script/CircuitAide.gs](apps-script/CircuitAide.gs) | Circuit des demandes d'aide entre cellules |
+| [apps-script/CircuitAide.gs](apps-script/CircuitAide.gs) | Règles du circuit des demandes d'aide |
+| [apps-script/CircuitPret.gs](apps-script/CircuitPret.gs) | Règles du circuit des demandes de prêt |
+| [apps-script/MoteurCircuits.gs](apps-script/MoteurCircuits.gs) | Moteur commun qui applique les règles des deux circuits |
 | [web/src/content.js](web/src/content.js) | ✏️ Textes, couleurs, logo de la landing page |
 | [web/src/config.js](web/src/config.js) | Liens des formulaires, limites de téléversement |
 | [plus-tard/](plus-tard/) | Ébauche du circuit entre cellules (inutilisée pour l'instant) |
@@ -64,7 +66,6 @@ Formulaire ──(à l'envoi)──► Nouveaux dossiers
   de validation est ajoutée automatiquement.
 - **Quand un analyste choisit « Refusé »** : la ligne est copiée dans « Dossiers refusés », avec « Statut analyse »
   et la date de refus.
-- Statuts et destinations se règlent dans `statusRules` : une règle par statut, avec ses feuilles et sa colonne de date.
 - Les colonnes sont associées **par leur nom**, quel que soit leur ordre. Les colonnes sans équivalent (analystes,
   finance) ne sont jamais écrasées. `installer` affiche dans le journal la liste de ces colonnes.
 - Un dossier n'est jamais copié deux fois dans une même feuille (contrôle sur le matricule).
@@ -84,11 +85,45 @@ Formulaire ──(à l'envoi)──► Nouveaux dossiers
   Ses liens restent valides après le déplacement.
 - **Valeurs par défaut** à l'arrivée d'un dossier : « Archiver le dossier » = « Pas encore » (Dossiers refusés,
   Aides Finance) et « Status » = « En Attente » (Aides Finance).
-- **« Date de réception »** reprend le « Timestamp » de « Formulaire » (réglage `columnAliases`). Les accents et
+- **« Date de réception »** reprend le « Timestamp » de « Formulaire » (réglage `COLUMN_ALIASES`). Les accents et
   les majuscules ne comptent pas dans les noms de colonnes.
 
-Réglages dans le bloc `CIRCUIT_AIDE` de [Config.gs](apps-script/Config.gs) : noms des feuilles et des colonnes,
-statuts et destinations. L'identifiant du fichier Finance se trouve dans [Identifiants.gs](apps-script/Identifiants.gs).
+Réglages : [CircuitAide.gs](apps-script/CircuitAide.gs).
+
+## Circuit des demandes de prêt
+
+```
+Demande de prêts › Formulaire ──(à l'envoi)──► ANALYSE › Nouveaux dossiers (Status Analyse = En cours d'examen)
+
+ANALYSE › Nouveaux dossiers ── Status Analyse ─┬─ Validé ─► Dossiers validés ── Passer à la Cellule verification = Oui ─► VÉRIFICATION › Nouveaux dossiers
+                                               └─ Rejeté ─► Dossiers rejetés ── Archiver = Oui ─► ARCHIVES › Prêts refusés
+
+VÉRIFICATION › Nouveaux dossiers ── Statuts Vérification ─┬─ Validé ─► Dossiers validés ── Passer à la cellule finance = Oui ─► FINANCE › Prêts
+                                                          └─ Rejeté ─► Dossiers rejetés ── Archiver = Oui ─► ARCHIVES › Prêts refusés
+
+FINANCE › Prêts ── Passer à la cellule Suivi = Oui ─► SUIVI › Nouveaux dossiers ── Archiver = Oui ─► ARCHIVES › Prêts validés
+                                                                                   (« Date de fin de suivi » obligatoire)
+```
+
+- **Décisions** (« Status Analyse », « Statuts Vérification ») : « Validé » ou « Rejeté » (« Refusé » est aussi accepté).
+  La date de décision est notée dans « Date de fin d'analyse » / « Date de fin de vérification » si la colonne existe.
+  Changer de décision retire le dossier de la feuille de l'ancienne décision.
+- **Passages** (« Passer à… » = Oui) : copie dans la cellule suivante, sans condition. À l'arrivée, les colonnes
+  « Passer à… » et « Archiver » valent « En attente », et les décisions « En cours d'examen ».
+- **Archivage** (« Archiver » = Oui) : copie dans les Archives avec la date d'archivage, retrait de « Nouveaux dossiers »
+  d'Analyse **et** de Vérification, et déplacement du dossier Drive `PAFIS_…` dans « Documents Prêts ». Le dossier
+  reste dans la feuille où « Oui » a été choisi. Depuis Suivi, « Date de fin de suivi » doit être remplie : sinon
+  « Archiver » repasse à « En attente » avec une note.
+- « Date de fin de suivi » (Suivi) est reportée dans « Date de fin de suivie » (Archives).
+- **« Date de fin d'analyse »** est remplie automatiquement quand l'analyste choisit « Passer à la Cellule
+  verification » = Oui. Pour un dossier rejeté, c'est la date du rejet.
+- **Nouvelles colonnes** : une colonne ajoutée dans une feuille d'une cellule est **recréée automatiquement**, avec
+  son contenu, dans chaque feuille où le dossier passe ensuite, jusqu'aux Archives. Elle est ajoutée à droite du
+  tableau. La colonne qui déclenche le passage (« Passer à… ») n'est pas recréée dans la cellule suivante. Un dossier
+  déjà transmis avant l'ajout de la colonne n'est pas mis à jour.
+
+Réglages : [CircuitPret.gs](apps-script/CircuitPret.gs). Identifiants des fichiers : `analyse`,
+`verification`, `finance`, `suivi`, `archives` dans [Identifiants.gs](apps-script/Identifiants.gs).
 
 ## Installation d'Apps Script
 
@@ -103,6 +138,8 @@ statuts et destinations. L'identifiant du fichier Finance se trouve dans [Identi
    - **+** → Script → **Reception** → [Reception.gs](apps-script/Reception.gs)
    - **+** → Script → **Depot** → [Depot.gs](apps-script/Depot.gs)
    - **+** → Script → **CircuitAide** → [CircuitAide.gs](apps-script/CircuitAide.gs)
+   - **+** → Script → **CircuitPret** → [CircuitPret.gs](apps-script/CircuitPret.gs)
+   - **+** → Script → **MoteurCircuits** → [MoteurCircuits.gs](apps-script/MoteurCircuits.gs)
    - `appsscript.json` → remplacez tout le contenu par [appsscript.json](apps-script/appsscript.json)
 4. Dans **Identifiants**, collez les identifiants des 2 fichiers de réponses et du fichier Finance. L'identifiant
    est la partie entre `/d/` et `/edit` dans l'adresse du fichier. Enregistrez avec **Ctrl+S**.
